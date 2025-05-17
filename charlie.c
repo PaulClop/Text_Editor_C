@@ -1,3 +1,5 @@
+#include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
@@ -15,10 +17,15 @@ void enableRawMode()
     tcgetattr(STDIN_FILENO, &orig_termios);
     atexit(disableRawMode);
 
-    // opreste afisare characterelor in terminal, flash la unread characters
     struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO);
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+
+    // opreste CTRL - M (carriage) | CTRL - S/Q
+    raw.c_iflag &= ~(ICRNL | IXON);
+    
+    // opreste afisare characterelor in terminal | canonical mode | CTRL - V | CTRL - C/Z
+    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG); 
+
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw); //aplicare setari, flash la unread characters
 }
 
 int main()
@@ -27,7 +34,18 @@ int main()
 
     // Citeste fiecare bit / charater
     char c;
-    while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q');
+    while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q')
+    {
+        if (iscntrl(c)) // non-printable/control character
+        {
+            printf("%d\n", c);
+        } 
+
+        else 
+        {
+            printf("%d ('%c')\n", c, c);
+        }
+    }
 
     return 1;
 }
