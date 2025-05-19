@@ -6,6 +6,10 @@
 #include <termios.h>
 #include <unistd.h>
 
+/* DEFINIRI */
+
+#define CTRL_KEY(k) ((k) & 0x1f) // imita ctrl-(k)
+
 /* DATA */
 
 struct termios orig_termios;
@@ -51,31 +55,53 @@ void enableRawMode()
         die("tcsetattr");
 }
 
+// returneaza fiecare bit / charater citit
+char editorReadKey() 
+{
+    int nread;
+    char c;
+
+    while ((nread = read(STDIN_FILENO, &c, 1)) != 1)
+    {
+        if (nread == -1 && errno != EAGAIN) 
+            die("read");
+    }
+
+    return c;
+}
+
+/* IESIRE */
+
+void editorRefreshScreen()
+{
+    write(STDOUT_FILENO, "\x1b[2J", 4); // <esc>[ - Escape (x1b = 0x1B = 27), 2 - tot ecranul, J - clear screen
+}
+
+/* INTRARE */
+
+// proceseaza characterul
+void editorProcessKeypress()
+{
+  char c = editorReadKey();
+
+  switch (c)
+  {
+    case CTRL_KEY('q'):
+        exit(0);
+        break;
+  }
+}
+
 /* INITIALIZARE */
 
 int main()
 {
     enableRawMode();
 
-    // Citeste fiecare bit / charater
-    while(1)
+    while (1)
     {
-        char c = '\0';
-        if(read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) // fara eroare cand time out
-            die("read");
-    
-        if (iscntrl(c)) // non-printable/control character
-        {
-            printf("%d\r\n", c);
-        } 
-
-        else 
-        {
-            printf("%d ('%c')\r\n", c, c);
-        }
-
-        if(c == 'q')
-            break;
+        editorRefreshScreen();
+        editorProcessKeypress();
     }
 
     return 1;
