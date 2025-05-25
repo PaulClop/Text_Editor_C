@@ -83,12 +83,40 @@ char editorReadKey()
     return c;
 }
 
+int getCursorPosition(int *rows, int *cols)
+{
+    if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) // primeste coordonatele cursor-ului sub forma <esc>linie;coloanaR
+        return -1;
+    printf("\r\n");
+
+    // afiseaza ce obtine
+    char c;
+    while (read(STDIN_FILENO, &c, 1) == 1)
+    {
+        if (iscntrl(c))
+        {
+            printf("%d\r\n", c);
+        }
+
+        else
+        {
+            printf("%d ('%c')\r\n", c, c);
+        }
+    }
+
+    editorReadKey();
+    return -1;
+}
+
 int getWindowSize(int *rows, int *cols)
 {
     struct winsize ws;
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) // Terminal IOCtl (input/output control) Get WINdow SiZe
+    if (1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) // Terminal IOCtl (input/output control) Get WINdow SiZe
     {
-        return -1;
+        // in cazul daca prima metoda nu functioneaza, cursor coltul dreapta jos si aflam coordonatele
+        if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) // daca nicio metoda nu functioneaza
+            return -1;
+        return getCursorPosition(rows, cols);
     }
 
     else
