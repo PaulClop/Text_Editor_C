@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -10,6 +11,8 @@
 /* DEFINIRI */
 
 #define CTRL_KEY(k) ((k) & 0x1f) // imita ctrl-(k)
+#define ABUF_INIT {NULL, 0}
+#define Charlie_VERSION "0.1"
 
 /* DATA */
 
@@ -130,25 +133,84 @@ int getWindowSize(int *rows, int *cols)
     }
 }
 
+/* append buffer */
+struct abuf
+{
+    char *b;
+    int len;
+};
+
+// alocare memorie si append
+void abAppend(struct abuf *ab, const char *s, int len)
+{
+    char *new = realloc(ab->b, ab->len + len); 
+    if (new == NULL)
+        return;
+
+    memcpy(&new[ab->len], s, len);
+    ab->b = new;
+    ab->len += len;
+}
+
+// golire memorie abuf
+void abFree(struct abuf *ab)
+{
+  free(ab->b);
+}
+
 /* IESIRE */
 
 // pentru ~ la inceputul liniilor 
-void editorDrawRows()
+void editorDrawRows(struct abuf *ab)
 {
     int y;
     for (y = 0; y < E.screenrows; y++)
     {
-        write(STDOUT_FILENO, "~\r\n", 3);
+        // afisare mesaj de bun-venit
+        if (y == E.screenrows / 3)
+        {
+            char welcome[80];
+            int welcomelen = snprintf(welcome, sizeof(welcome), "Charlie editor -- version %s", Charlie_VERSION);
+            if (welcomelen > E.screencols)
+                welcomelen = E.screencols;
+
+            // centrare mesaj
+            int padding = (E.screencols - welcomelen) / 2; 
+            if (padding)
+            {
+                abAppend(ab, "~", 1);
+                padding--;
+            }
+            while (padding--)
+                abAppend(ab, " ", 1);
+
+            abAppend(ab, welcome, welcomelen);
+        }
+        else
+            abAppend(ab, "~", 1);
+
+        abAppend(ab, "\x1b[K", 3); // sterge pornind dupa cursor linia
+
+        // verificare ultima linie
+        if (y < E.screenrows - 1)
+            abAppend(ab, "\r\n", 2);
     }
 }
 
 void editorRefreshScreen()
 {
-    write(STDOUT_FILENO, "\x1b[2J", 4); // <esc>[ - Escape (x1b = 0x1B = 27), 2 - tot ecranul, J - clear screen
-    write(STDOUT_FILENO, "\x1b[H", 3); // pozitioneaza mouse-ul la inceput
+    struct abuf ab = ABUF_INIT;
 
-    editorDrawRows();
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    // <esc>[ - Escape (x1b = 0x1B = 27)
+    abAppend(&ab, "\x1b[?25l", 6); // ascunde mouse-ul
+    abAppend(&ab, "\x1b[H", 3); // pozitioneaza mouse-ul la inceput
+
+    editorDrawRows(&ab);
+    abAppend(&ab, "\x1b[H", 3);
+    abAppend(&ab, "\x1b[?25h", 6); // afiseaza mouse-ul
+
+    write(STDOUT_FILENO, ab.b, ab.len);
+    abFree(&ab);
 }
 
 /* INTRARE */
