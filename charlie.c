@@ -1,5 +1,5 @@
-/* LIBRARI */ 
-#include <ctype.h>  
+/* LIBRARI */
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,11 +25,10 @@ struct editorConfig
 
 struct editorConfig E;
 
-
 /* TERMINAL */
 
 // afisare eroare si terminare program
-void die(const char *s) 
+void die(const char *s)
 {
     // stergere ecran
     write(STDOUT_FILENO, "\x1b[2J", 4);
@@ -41,14 +40,14 @@ void die(const char *s)
 
 void disableRawMode()
 {
-    if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
         die("tcsetattr");
 }
 
-void enableRawMode() 
+void enableRawMode()
 {
     // salveaza si inregistreaza aplicarea la terminare programului setarile default terminal
-    if(tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
+    if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
         die("tcgetattr");
     atexit(disableRawMode);
 
@@ -58,28 +57,28 @@ void enableRawMode()
     raw.c_iflag &= ~(ICRNL | IXON | BRKINT | INPCK | ISTRIP);
 
     raw.c_oflag &= ~(OPOST); // opreste "\n" in "\r\n"
-    
+
     // opreste afisare characterelor in terminal | canonical mode | CTRL - V | CTRL - C/Z
-    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG); 
+    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 
     // timp de asteptare pentru input, character control
-    raw.c_cc[VMIN] = 0; // minimul de bytes cititi pentru read() sa returneze
+    raw.c_cc[VMIN] = 0;  // minimul de bytes cititi pentru read() sa returneze
     raw.c_cc[VTIME] = 1; // ./10 secunde
 
-    //aplicare setari, flash la unread characters
-    if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw))
+    // aplicare setari, flash la unread characters
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw))
         die("tcsetattr");
 }
 
 // returneaza fiecare bit / charater citit
-char editorReadKey() 
+char editorReadKey()
 {
     int nread;
     char c;
 
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1)
     {
-        if (nread == -1 && errno != EAGAIN) 
+        if (nread == -1 && errno != EAGAIN)
             die("read");
     }
 
@@ -88,12 +87,12 @@ char editorReadKey()
 
 int getCursorPosition(int *rows, int *cols)
 {
-    char buf[32]; 
+    char buf[32];
     unsigned int i = 0;
 
     if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) // primeste coordonatele cursor-ului sub forma <esc>linie;coloanaR
         return -1;
-    
+
     while (i < sizeof(buf) - 1)
     {
         if (read(STDIN_FILENO, &buf[i], 1) != 1)
@@ -104,7 +103,7 @@ int getCursorPosition(int *rows, int *cols)
     }
 
     buf[i] = '\0';
-    
+
     // verificare buffer + extragere
     if (buf[0] != '\x1b' || buf[1] != '[')
         return -1;
@@ -143,7 +142,7 @@ struct abuf
 // alocare memorie si append
 void abAppend(struct abuf *ab, const char *s, int len)
 {
-    char *new = realloc(ab->b, ab->len + len); 
+    char *new = realloc(ab->b, ab->len + len);
     if (new == NULL)
         return;
 
@@ -155,12 +154,12 @@ void abAppend(struct abuf *ab, const char *s, int len)
 // golire memorie abuf
 void abFree(struct abuf *ab)
 {
-  free(ab->b);
+    free(ab->b);
 }
 
 /* IESIRE */
 
-// pentru ~ la inceputul liniilor 
+// pentru ~ la inceputul liniilor
 void editorDrawRows(struct abuf *ab)
 {
     int y;
@@ -175,7 +174,7 @@ void editorDrawRows(struct abuf *ab)
                 welcomelen = E.screencols;
 
             // centrare mesaj
-            int padding = (E.screencols - welcomelen) / 2; 
+            int padding = (E.screencols - welcomelen) / 2;
             if (padding)
             {
                 abAppend(ab, "~", 1);
@@ -203,7 +202,7 @@ void editorRefreshScreen()
 
     // <esc>[ - Escape (x1b = 0x1B = 27)
     abAppend(&ab, "\x1b[?25l", 6); // ascunde mouse-ul
-    abAppend(&ab, "\x1b[H", 3); // pozitioneaza mouse-ul la inceput
+    abAppend(&ab, "\x1b[H", 3);    // pozitioneaza mouse-ul la inceput
 
     editorDrawRows(&ab);
     abAppend(&ab, "\x1b[H", 3);
@@ -218,16 +217,16 @@ void editorRefreshScreen()
 // proceseaza characterul
 void editorProcessKeypress()
 {
-  char c = editorReadKey();
+    char c = editorReadKey();
 
-  switch (c)
-  {
+    switch (c)
+    {
     case CTRL_KEY('q'):
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
         exit(0);
         break;
-  }
+    }
 }
 
 /* INITIALIZARE */
@@ -235,7 +234,8 @@ void editorProcessKeypress()
 // preia dimensiunile ecranului
 void initEditor()
 {
-    if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1)
+        die("getWindowSize");
 }
 
 int main()
