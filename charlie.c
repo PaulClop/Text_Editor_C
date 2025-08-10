@@ -19,7 +19,12 @@ enum editorKey
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
     ARROW_UP,
-    ARROW_DOWN
+    ARROW_DOWN,
+    DEL_KEY,
+    HOME_KEY,
+    END_KEY,
+    PAGE_UP,
+    PAGE_DOWN,
 };
 
 /* DATA */
@@ -55,7 +60,8 @@ void disableRawMode()
 
 void enableRawMode()
 {
-    // salveaza si inregistreaza aplicarea la terminare programului setarile default terminal
+    // salveaza si inregistreaza aplicarea la terminare programului setarile
+    // default terminal
     if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
         die("tcgetattr");
     atexit(disableRawMode);
@@ -67,7 +73,8 @@ void enableRawMode()
 
     raw.c_oflag &= ~(OPOST); // opreste "\n" in "\r\n"
 
-    // opreste afisare characterelor in terminal | canonical mode | CTRL - V | CTRL - C/Z
+    // opreste afisare characterelor in terminal | canonical mode | CTRL - V |
+    // CTRL - C/Z
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 
     // timp de asteptare pentru input, character control
@@ -99,22 +106,54 @@ int editorReadKey()
             return '\x1b';
         if (read(STDIN_FILENO, &seq[1], 1) != 1)
             return '\x1b';
+
         if (seq[0] == '[')
+        {
+            if (seq[1] >= '0' && seq[1] <= '9')
+            {
+                if (read(STDIN_FILENO, &seq[2], 1) != 1)
+                    return '\x1b';
+                if (seq[2] == '~')
+                {
+                    switch (seq[1])
+                    {
+                    case '1': return HOME_KEY;
+                    case '3': return DEL_KEY; // momentan nu face nimic
+                    case '4': return END_KEY;
+                    case '5': return PAGE_UP;
+                    case '6': return PAGE_DOWN;
+                    case '7': return HOME_KEY;
+                    case '8': return END_KEY;
+                    }
+                }
+            }
+
+            else
+            {
+                switch (seq[1])
+                {
+                case 'A': return ARROW_UP;
+                case 'B': return ARROW_DOWN;
+                case 'C': return ARROW_RIGHT;
+                case 'D': return ARROW_LEFT;
+                case 'H': return HOME_KEY;
+                case 'F': return END_KEY;
+                }
+            }
+        }
+
+        else if (seq[0] == 'O')
         {
             switch (seq[1])
             {
-            case 'A':
-                return ARROW_UP;
-            case 'B':
-                return ARROW_DOWN;
-            case 'C':
-                return ARROW_RIGHT;
-            case 'D':
-                return ARROW_LEFT;
+            case 'H': return HOME_KEY;
+            case 'F': return END_KEY;
             }
         }
+
         return '\x1b';
     }
+
     else
     {
         return c;
@@ -152,9 +191,11 @@ int getCursorPosition(int *rows, int *cols)
 int getWindowSize(int *rows, int *cols)
 {
     struct winsize ws;
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) // Terminal IOCtl (input/output control) Get WINdow SiZe
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 ||
+        ws.ws_col == 0) // Terminal IOCtl (input/output control) Get WINdow SiZe
     {
-        // in cazul daca prima metoda nu functioneaza, cursor coltul dreapta jos si aflam coordonatele
+        // in cazul daca prima metoda nu functioneaza, cursor coltul dreapta jos si
+        // aflam coordonatele
         if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) // daca nicio metoda nu functioneaza
             return -1;
         return getCursorPosition(rows, cols);
@@ -243,7 +284,8 @@ void editorRefreshScreen()
     editorDrawRows(&ab);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1); // terminalul foloseste index 1
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1,
+             E.cx + 1); // terminalul foloseste index 1
     abAppend(&ab, buf, strlen(buf));
 
     abAppend(&ab, "\x1b[?25h", 6); // afiseaza mouse-ul
@@ -302,12 +344,22 @@ void editorProcessKeypress()
         exit(0);
         break;
 
+    case HOME_KEY: E.cx = 0; break;
+    case END_KEY: E.cx = E.screencols - 1; break;
+
+    // ↑ sau ↓ nr. de randuri vizibile
+    case PAGE_UP:
+    case PAGE_DOWN: {
+        int times = E.screenrows;
+        while (times--)
+            editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
+    }
+    break;
+
     case ARROW_UP:
     case ARROW_DOWN:
     case ARROW_LEFT:
-    case ARROW_RIGHT:
-        editorMoveCursor(c);
-        break;
+    case ARROW_RIGHT: editorMoveCursor(c); break;
     }
 }
 
